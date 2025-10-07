@@ -1,10 +1,10 @@
 // ──────────────────────────────────────────────────────────────────────
-//  api/bot.js  –  Telegram‑бот, Vercel Serverless Function
+//  api/bot.js – Telegram‑бот, Vercel Serverless Function
 // ──────────────────────────────────────────────────────────────────────
 import { Telegraf } from "telegraf";
 
 /* ------------------------------------------------------------------
-   Токен и ID администратора – уже подставлены.
+   Токен бота и ID администратора – уже подставлены.
    ------------------------------------------------------------------ */
 const BOT_TOKEN = "7964054515:AAHIU9aDGoFQkfDaplTkbVQ9_JlilcrBzYM";
 const ADMIN_ID  = 111603368;               // ваш telegram‑user_id
@@ -74,7 +74,7 @@ const dayInfo = [
 ];
 
 /* ------------------------------------------------------------------
-   Вспомогательные маппинги (англ. ↔ рус. названия дней)
+   Маппинг названий дней
    ------------------------------------------------------------------ */
 const EN_RU_DAYS = {
   Monday:    "Пн",
@@ -95,20 +95,19 @@ const RU_EN_DAYS = {
 };
 
 /* ------------------------------------------------------------------
-   ОТКРЫТЫЕ ПОЛЬЗОВАТЕЛИ – нужен для рассылки админа.
-   В продакшене лучше вынести в БД/Redis.
+   Список известных пользователей (для рассылки)
    ------------------------------------------------------------------ */
 let knownUsers = new Set();
 
 /* ------------------------------------------------------------------
-   Форматирование (markdown‑v2) ---------------------------------------
+   Форматирование сообщений (MarkdownV2)
    ------------------------------------------------------------------ */
 function formatDaySchedule(ruDay) {
   const enDay = RU_EN_DAYS[ruDay];
   if (!enDay) return `❓ Неизвестный день «${ruDay}».`;
 
   const rows = schedule
-    .filter(r => r[enDay])                     // убрать пустые ячейки
+    .filter(r => r[enDay])
     .map(r => `${r.time} — ${r[enDay]}`);
 
   return rows.length
@@ -139,42 +138,45 @@ function formatWeekPickup() {
 }
 
 /* ------------------------------------------------------------------
-   Инлайн‑клавиатуры ---------------------------------------------------
+   Инлайн‑клавиатуры
    ------------------------------------------------------------------ */
 function mainMenuKeyboard(isAdmin) {
   const buttons = [
-    [{ text: "📅 Расписание на неделю", callback_data: "menu_schedule_week" }],
-    [{ text: "📅 Расписание на день",   callback_data: "menu_schedule_day" }],
-    [{ text: "🗓️ График на неделю",    callback_data: "menu_pickup_week" }],
-    [{ text: "🗓️ График на день",      callback_data: "menu_pickup_day" }]
+    [{ text: "📅 Расписание на неделю", callback_data: "schedule_week" }],
+    [{ text: "📅 Расписание на день",   callback_data: "schedule_day" }],
+    [{ text: "🗓️ График на неделю",    callback_data: "pickup_week" }],
+    [{ text: "🗓️ График на день",      callback_data: "pickup_day" }]
   ];
-
   if (isAdmin) {
     buttons.push([{ text: "🔔 Уведомить об обновлении", callback_data: "admin_notify" }]);
   }
-
-  // кнопка «Назад» будет добавлена в подменю, а не в главном меню
   return { inline_keyboard: buttons };
 }
 
+/* Клавиатура выбора дней.
+   prefix — часть callback_data, чтобы различать «schedule_…» и «pickup_…» */
 function daysKeyboard(prefix) {
-  // prefix – что будет в callback_data перед названием дня
-  const dayButtons = ["Пн", "Вт", "Ср", "Чт", "Пт"].map(d => ({
+  const dayBtns = ["Пн", "Вт", "Ср", "Чт", "Пт"].map(d => ({
     text: d,
     callback_data: `${prefix}_${d}`
   }));
-
-  // раскладываем по 3/2 кнопки для удобства
   return {
     inline_keyboard: [
-      dayButtons.slice(0, 3),
-      dayButtons.slice(3, 5).concat([{ text: "↩️ Назад", callback_data: "back_main" }])
+      dayBtns.slice(0, 3),
+      dayBtns.slice(3, 5).concat([{ text: "↩️ Назад", callback_data: "back_main" }])
     ]
   };
 }
 
 /* ------------------------------------------------------------------
-   Обработчики ---------------------------------------------------------
+   Хелпер‑логгер: покажет любой полученный callback_query
+   ------------------------------------------------------------------ */
+bot.on("callback_query", ctx => {
+  console.log("🔔 Callback query received:", ctx.callbackQuery?.data);
+});
+
+/* ------------------------------------------------------------------
+   Стартовое сообщение
    ------------------------------------------------------------------ */
 bot.start(ctx => {
   knownUsers.add(ctx.from.id);
@@ -185,32 +187,32 @@ bot.start(ctx => {
   );
 });
 
-/* ---------- Главное меню ------------------------------------------------ */
-bot.action("menu_schedule_week", async ctx => {
-  await ctx.answerCbQuery();                       // скрываем «loading»
+/* ---------------------- Главное меню ------------------------------- */
+bot.action("schedule_week", async ctx => {
+  await ctx.answerCbQuery();
   await ctx.replyWithMarkdownV2(formatWeekSchedule(), {
     reply_markup: { inline_keyboard: [[{ text: "↩️ Назад", callback_data: "back_main" }]] }
   });
 });
 
-bot.action("menu_schedule_day", async ctx => {
+bot.action("schedule_day", async ctx => {
   await ctx.answerCbQuery();
   await ctx.reply("Выбери день недели:", { reply_markup: daysKeyboard("schedule") });
 });
 
-bot.action("menu_pickup_week", async ctx => {
+bot.action("pickup_week", async ctx => {
   await ctx.answerCbQuery();
   await ctx.replyWithMarkdownV2(formatWeekPickup(), {
     reply_markup: { inline_keyboard: [[{ text: "↩️ Назад", callback_data: "back_main" }]] }
   });
 });
 
-bot.action("menu_pickup_day", async ctx => {
+bot.action("pickup_day", async ctx => {
   await ctx.answerCbQuery();
   await ctx.reply("Выбери день недели:", { reply_markup: daysKeyboard("pickup") });
 });
 
-/* ---------- Выбор отдельного дня --------------------------------------- */
+/* ---------------------- Выбор отдельного дня ---------------------- */
 bot.action(/^schedule_(\p{L}{2})$/u, async ctx => {
   const ruDay = ctx.match[1];
   await ctx.answerCbQuery();
@@ -227,7 +229,7 @@ bot.action(/^pickup_(\p{L}{2})$/u, async ctx => {
   });
 });
 
-/* ---------- Возврат в главное меню ----------------------------------- */
+/* ---------------------- Возврат в главное меню ------------------- */
 bot.action("back_main", async ctx => {
   await ctx.answerCbQuery();
   await ctx.editMessageText(
@@ -236,16 +238,16 @@ bot.action("back_main", async ctx => {
   );
 });
 
-/* ---------- Уведомление админа ---------------------------------------- */
+/* ---------------------- Уведомление админа ---------------------- */
 bot.action("admin_notify", async ctx => {
   if (ctx.from.id !== ADMIN_ID) {
     await ctx.answerCbQuery("Эта кнопка только для администратора", { show_alert: true });
     return;
   }
 
-  await ctx.answerCbQuery(); // скрываем «loading»
+  await ctx.answerCbQuery(); // скрыть «loading»
 
-  const text = "🔔 *Расписание обновлено!* Проверьте актуальные данные кнопками в боте.";
+  const text = "🔔 *Расписание обновлено!* Проверьте актуальные данные в боте.";
   const promises = [...knownUsers].map(uid =>
     ctx.telegram.sendMessage(uid, text, { parse_mode: "MarkdownV2" })
   );
@@ -257,7 +259,7 @@ bot.action("admin_notify", async ctx => {
   await ctx.reply(`✅ Оповещение отправлено ${ok} пользователям, не удалось ${fail}.`);
 });
 
-/* ---------- Любой нераспознанный ввод --------------------------------- */
+/* ---------------------- Любой другой ввод ----------------------- */
 bot.on("text", async ctx => {
   await ctx.reply(
     "❓ Выберите действие, используя кнопки ниже.",
@@ -271,13 +273,12 @@ bot.on("text", async ctx => {
 export default async function handler(req, res) {
   if (req.method === "POST") {
     try {
-      await bot.handleUpdate(req.body, res);   // Telegraf принимает обычный объект update
+      await bot.handleUpdate(req.body, res);
     } catch (e) {
-      console.error("Bot error:", e);
+      console.error("❗ Bot error:", e);
       res.status(500).send("internal error");
     }
   } else {
-    // простая проверка, что функция работает
     res.status(200).send("Telegram bot is alive 👋");
   }
 }
