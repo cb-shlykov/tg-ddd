@@ -141,20 +141,19 @@ function formatWeekPickup() {
    Инлайн‑клавиатуры
    ------------------------------------------------------------------ */
 function mainMenuKeyboard(isAdmin) {
-  const buttons = [
+  const btns = [
     [{ text: "📅 Расписание на неделю", callback_data: "schedule_week" }],
     [{ text: "📅 Расписание на день",   callback_data: "schedule_day" }],
     [{ text: "🗓️ График на неделю",    callback_data: "pickup_week" }],
     [{ text: "🗓️ График на день",      callback_data: "pickup_day" }]
   ];
   if (isAdmin) {
-    buttons.push([{ text: "🔔 Уведомить об обновлении", callback_data: "admin_notify" }]);
+    btns.push([{ text: "🔔 Уведомить об обновлении", callback_data: "admin_notify" }]);
   }
-  return { inline_keyboard: buttons };
+  return { inline_keyboard: btns };
 }
 
-/* Клавиатура выбора дней.
-   prefix — часть callback_data, чтобы различать «schedule_…» и «pickup_…» */
+/* Клавиатура выбора дней – prefix = "schedule" или "pickup" */
 function daysKeyboard(prefix) {
   const dayBtns = ["Пн", "Вт", "Ср", "Чт", "Пт"].map(d => ({
     text: d,
@@ -169,10 +168,10 @@ function daysKeyboard(prefix) {
 }
 
 /* ------------------------------------------------------------------
-   Хелпер‑логгер: покажет любой полученный callback_query
+   Отладочный лог – каждый callback_query попадает в консоль
    ------------------------------------------------------------------ */
 bot.on("callback_query", ctx => {
-  console.log("🔔 Callback query received:", ctx.callbackQuery?.data);
+  console.log("🔥 Callback received:", ctx.callbackQuery?.data);
 });
 
 /* ------------------------------------------------------------------
@@ -189,7 +188,7 @@ bot.start(ctx => {
 
 /* ---------------------- Главное меню ------------------------------- */
 bot.action("schedule_week", async ctx => {
-  await ctx.answerCbQuery();
+  await ctx.answerCbQuery(); // ✅ подтверждаем запрос
   await ctx.replyWithMarkdownV2(formatWeekSchedule(), {
     reply_markup: { inline_keyboard: [[{ text: "↩️ Назад", callback_data: "back_main" }]] }
   });
@@ -245,7 +244,7 @@ bot.action("admin_notify", async ctx => {
     return;
   }
 
-  await ctx.answerCbQuery(); // скрыть «loading»
+  await ctx.answerCbQuery(); // ✅ запрос обработан
 
   const text = "🔔 *Расписание обновлено!* Проверьте актуальные данные в боте.";
   const promises = [...knownUsers].map(uid =>
@@ -273,12 +272,18 @@ bot.on("text", async ctx => {
 export default async function handler(req, res) {
   if (req.method === "POST") {
     try {
-      await bot.handleUpdate(req.body, res);
+      // ------------ ВАЖНО! -------------- 
+      // Не передаём `res` в handleUpdate – иначе Vercel уже
+      // отправит ответ и Telegram “теряется”.
+      await bot.handleUpdate(req.body);
+      // После того, как Telegraf обработал запрос, просто отвечаем 200
+      res.status(200).send("ok");
     } catch (e) {
       console.error("❗ Bot error:", e);
       res.status(500).send("internal error");
     }
   } else {
+    // GET – простой health‑check
     res.status(200).send("Telegram bot is alive 👋");
   }
 }
