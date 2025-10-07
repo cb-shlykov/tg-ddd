@@ -11,38 +11,52 @@ module.exports = async (req, res) => {
   }
   
   if (req.method === 'POST') {
-    console.log('📨 Received Telegram update');
+    console.log('📨 Telegram webhook received');
     
     try {
-      // Получаем тело запроса
-      const body = req.body;
-      console.log('Request body:', JSON.stringify(body, null, 2));
+      // Проверяем наличие тела запроса
+      if (!req.body) {
+        console.log('❌ No request body');
+        return res.status(200).json({ok: true});
+      }
+      
+      console.log('✅ Update received:', JSON.stringify(req.body, null, 2));
       
       const scriptUrl = 'https://script.google.com/macros/s/AKfycbxBxDDBml54Pn8Ti7d8MKkl7UNIvraqVC_Ds5yid_vtuGEd5HykorL5-VE8T9WM1z6G/exec';
       
+      // Пересылаем в Apps Script с таймаутом
       console.log('🔄 Forwarding to Apps Script...');
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000);
+      
       const response = await fetch(scriptUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(body),
-        timeout: 30000
+        body: JSON.stringify(req.body),
+        signal: controller.signal
       });
       
+      clearTimeout(timeoutId);
+      
       const result = await response.text();
-      console.log('✅ Apps Script response status:', response.status);
-      console.log('✅ Apps Script response:', result);
+      console.log('✅ Apps Script response:', response.status, result);
       
       // Всегда возвращаем успех Telegram
       res.status(200).json({ok: true});
       
     } catch (error) {
-      console.error('❌ Error forwarding to Apps Script:', error);
-      // Всегда возвращаем 200 Telegram, иначе он отключит вебхук
-      res.status(200).json({ok: true, error: error.message});
+      console.error('❌ Error:', error.name, error.message);
+      
+      // Всегда возвращаем 200 для Telegram
+      res.status(200).json({ok: true, note: 'forwarding failed but ack sent'});
     }
   } else {
-    res.status(200).json({status: 'Ready for Telegram webhook'});
+    res.status(200).json({
+      status: 'Telegram webhook endpoint',
+      usage: 'Send POST requests here',
+      test: 'Webhook is ready'
+    });
   }
 };
