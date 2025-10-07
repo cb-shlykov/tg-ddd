@@ -1,16 +1,24 @@
 // api/bot.js
 import { Telegraf } from "telegraf";
 
-// ----------- CONFIG -------------------------------------------------
-const BOT_TOKEN   = process.env.BOT_TOKEN;      // <-- set in Vercel env vars
-const ADMIN_ID    = Number(process.env.ADMIN_ID); // <-- telegram numeric user_id of the admin
-if (!BOT_TOKEN) throw new Error("BOT_TOKEN env var is required");
+/* --------------------------------------------------------------
+   Токен бота и ID администратора – уже подставлены.
+   -------------------------------------------------------------- */
+const BOT_TOKEN = "7964054515:AAHIU9aDGoFQkfDaplTkbVQ9_JlilcrBzYM";
+const ADMIN_ID  = 111603368;               // telegram‑user_id администратора
 
-// -------------------------------------------------------------------
+if (!BOT_TOKEN) {
+  throw new Error("BOT_TOKEN is missing!");
+}
+
+/* --------------------------------------------------------------
+   Инициализация бота
+   -------------------------------------------------------------- */
 const bot = new Telegraf(BOT_TOKEN);
 
-// -------------------------------------------------------------------
-// 2 JSON‑tables (you can also read them from a file or a DB if you prefer)
+/* --------------------------------------------------------------
+   Данные расписания (schedule) и дополнительной инфы (dayInfo)
+   -------------------------------------------------------------- */
 const schedule = [
   {
     time: "08:00-08:40",
@@ -67,15 +75,16 @@ const dayInfo = [
   { day: "Пт", endOfLessons: "11:40", pickup: "Продленка", karate: false }
 ];
 
-// -------------------------------------------------------------------
-// Helper maps
+/* --------------------------------------------------------------
+   Вспомогательные константы и функции
+   -------------------------------------------------------------- */
 const EN_RU_DAYS = {
-  Monday: "Пн",
-  Tuesday: "Вт",
+  Monday:    "Пн",
+  Tuesday:   "Вт",
   Wednesday: "Ср",
-  Thursday: "Чт",
-  Friday: "Пт",
-  Saturday: "Сб"
+  Thursday:  "Чт",
+  Friday:    "Пт",
+  Saturday:  "Сб"
 };
 
 const RU_EN_DAYS = {
@@ -87,70 +96,33 @@ const RU_EN_DAYS = {
   Сб: "Saturday"
 };
 
-// In‑memory list of known users (persisted only while function "warms up").
-//   In production you would use a real DB (e.g. Upstash Redis, Supabase, …)
-//   For a simple demo this is enough.
+// Запоминаем всех, кто когда‑либо писал боту (для рассылки)
 let knownUsers = new Set();
 
-// -------------------------------------------------------------------
-// 1️⃣  /start – greet & remember the user
-bot.start((ctx) => {
-  knownUsers.add(ctx.from.id);
-  ctx.reply(
-    `👋 Привет, ${ctx.from.first_name}!\n` +
-    `Я — бот‑ассистент школы.\n\n` +
-    `📚 Доступные команды:\n` +
-    `/schedule – расписание на всю неделю\n` +
-    `/schedule <день> – расписание на выбранный день (Пн‑Пт)\n` +
-    `/pickup – информация о том, кто забирает ребёнка и есть ли карате\n` +
-    `/pickup <день> – та же информация только для конкретного дня\n` +
-    (ctx.from.id === ADMIN_ID
-      ? `\n🛎️ /notify – отправить всем сообщение “Расписание обновлено”`
-      : "")
-  );
-});
-
-// -------------------------------------------------------------------
-// Helper: format schedule for a **single** day (RU day abbreviation)
+/* --------------------------------------------------------------
+   Форматирование расписания
+   -------------------------------------------------------------- */
 function formatDaySchedule(ruDay) {
   const enDay = RU_EN_DAYS[ruDay];
   if (!enDay) return `❓ Неизвестный день «${ruDay}».`;
+
   const rows = schedule
-    .filter((row) => row[enDay]) // skip rows where the cell is null/undefined
-    .map((row) => `${row.time} — ${row[enDay]}`);
+    .filter((r) => r[enDay])                // пропускаем пустые ячейки
+    .map((r) => `${r.time} — ${r[enDay]}`);
+
   return rows.length
     ? `📅 *${ruDay}*:\n` + rows.join("\n")
-    : `📅 *${ruDay}* — нет занятий.`;
+    : `📅 *${ruDay}* — занятий нет.`;
 }
 
-// Helper: format whole‑week schedule
 function formatWeekSchedule() {
-  const daysOrder = ["Пн", "Вт", "Ср", "Чт", "Пт"];
-  const parts = daysOrder.map((d) => formatDaySchedule(d));
-  return parts.join("\n\n");
+  const days = ["Пн", "Вт", "Ср", "Чт", "Пт"];
+  return days.map(formatDaySchedule).join("\n\n");
 }
 
-// -------------------------------------------------------------------
-// 2️⃣  /schedule – whole week or one day
-bot.command("schedule", (ctx) => {
-  const args = ctx.message.text.split(/\s+/).slice(1); // after /schedule
-  if (args.length === 0) {
-    ctx.replyWithMarkdownV2(formatWeekSchedule());
-    return;
-  }
-  const day = args[0].charAt(0).toUpperCase() + args[0].slice(1).toLowerCase(); // normalise
-  const ruDay = Object.keys(RU_EN_DAYS).find(
-    (d) => d.toLowerCase() === day.toLowerCase()
-  );
-  if (!ruDay) {
-    ctx.reply(`❓ Неправильный день: ${day}. Пиши Пн, Вт, Ср, Чт, Пт`);
-    return;
-  }
-  ctx.replyWithMarkdownV2(formatDaySchedule(ruDay));
-});
-
-// -------------------------------------------------------------------
-// 3️⃣  /pickup – info about who picks the child + karate
+/* --------------------------------------------------------------
+   Форматирование информации о забирании/карате
+   -------------------------------------------------------------- */
 function formatPickupInfo(ruDay) {
   const info = dayInfo.find((i) => i.day === ruDay);
   if (!info) return `❓ Нет данных для дня ${ruDay}.`;
@@ -164,50 +136,89 @@ function formatPickupInfo(ruDay) {
   );
 }
 
+/* --------------------------------------------------------------
+   Команды бота
+   -------------------------------------------------------------- */
+bot.start((ctx) => {
+  knownUsers.add(ctx.from.id);
+  ctx.reply(
+    `👋 Привет, ${ctx.from.first_name}!\n` +
+    `Я — бот‑ассистент школы.\n\n` +
+    `📚 Доступные команды:\n` +
+    `/schedule — расписание на всю неделю\n` +
+    `/schedule <день> — расписание на конкретный день (Пн‑Пт)\n` +
+    `/pickup — кто и когда забирает ребёнка + карате\n` +
+    `/pickup <день> — та же информация только для выбранного дня\n` +
+    (ctx.from.id === ADMIN_ID ? `/notify — рассылка «Расписание обновлено» (только админ)` : "")
+  );
+});
+
+bot.command("schedule", (ctx) => {
+  const args = ctx.message.text.split(/\s+/).slice(1); // всё после /schedule
+  if (!args.length) {
+    ctx.replyWithMarkdownV2(formatWeekSchedule());
+    return;
+  }
+
+  const raw = args[0].trim();
+  const ruDay = Object.keys(RU_EN_DAYS).find(
+    (d) => d.toLowerCase() === raw.toLowerCase()
+  );
+
+  if (!ruDay) {
+    return ctx.reply(`❓ Неверный день: ${raw}. Пиши Пн, Вт, Ср, Чт, Пт`);
+  }
+
+  ctx.replyWithMarkdownV2(formatDaySchedule(ruDay));
+});
+
 bot.command("pickup", (ctx) => {
   const args = ctx.message.text.split(/\s+/).slice(1);
-  if (args.length === 0) {
-    // show all days (Mon‑Fri)
-    const all = dayInfo
-      .map((i) => formatPickupInfo(i.day))
-      .join("\n\n");
-    ctx.replyWithMarkdownV2(all);
-    return;
+  if (!args.length) {
+    const all = dayInfo.map((i) => formatPickupInfo(i.day)).join("\n\n");
+    return ctx.replyWithMarkdownV2(all);
   }
-  const day = args[0].charAt(0).toUpperCase() + args[0].slice(1).toLowerCase();
+
+  const raw = args[0].trim();
   const ruDay = Object.keys(RU_EN_DAYS).find(
-    (d) => d.toLowerCase() === day.toLowerCase()
+    (d) => d.toLowerCase() === raw.toLowerCase()
   );
+
   if (!ruDay) {
-    ctx.reply(`❓ Неправильный день: ${day}. Пиши Пн, Вт, Ср, Чт, Пт`);
-    return;
+    return ctx.reply(`❓ Неверный день: ${raw}. Пиши Пн, Вт, Ср, Чт, Пт`);
   }
+
   ctx.replyWithMarkdownV2(formatPickupInfo(ruDay));
 });
 
-// -------------------------------------------------------------------
-// 4️⃣  ADMIN command – broadcast “Расписание обновлено”
+/* --------------------------------------------------------------
+   Команда админа – рассылка "Расписание обновлено"
+   -------------------------------------------------------------- */
 bot.command("notify", async (ctx) => {
   if (ctx.from.id !== ADMIN_ID) {
-    return ctx.reply("🚫 Вы не администратор.");
+    return ctx.reply("🚫 Эта команда доступна только администратору.");
   }
+
   const text = "🔔 *Расписание обновлено!* Проверьте актуальные данные командой /schedule.";
-  const promises = [...knownUsers].map((uid) => ctx.telegram.sendMessage(uid, text, { parse_mode: "MarkdownV2" }));
-  try {
-    await Promise.allSettled(promises);
-    ctx.reply(`✅ Оповещение отправлено ${knownUsers.size} пользователям.`);
-  } catch (e) {
-    ctx.reply("⚠️ При отправке произошла ошибка.");
-  }
+  const promises = [...knownUsers].map((uid) =>
+    ctx.telegram.sendMessage(uid, text, { parse_mode: "MarkdownV2" })
+  );
+
+  const results = await Promise.allSettled(promises);
+  const ok = results.filter((r) => r.status === "fulfilled").length;
+  const fail = results.length - ok;
+
+  ctx.reply(`✅ Оповещение отправлено ${ok} пользователям, не удалось ${fail}.`);
 });
 
-// -------------------------------------------------------------------
-// 5️⃣  Any other text – friendly fallback + quick‑reply keyboard
+/* --------------------------------------------------------------
+   Любой другой ввод – подсказываем доступные команды
+   -------------------------------------------------------------- */
 bot.on("text", (ctx) => {
   ctx.reply(
-    "❓ Я не понял команду. Доступные команды:\n" +
-    "/schedule, /schedule Пн, /pickup, /pickup Пт\n" +
-    (ctx.from.id === ADMIN_ID ? "/notify (только админ)" : ""),
+    "❓ Не понял команду. Доступные команды:\n" +
+    "/schedule, /schedule Пн, /pickup, /pickup Пт" +
+    (ctx.from.id === ADMIN_ID ? "\n/notify (только админ)" : ""),
     {
       reply_markup: {
         keyboard: [
@@ -221,19 +232,19 @@ bot.on("text", (ctx) => {
   );
 });
 
-// -------------------------------------------------------------------
-// Vercel entry point – webhook handler
+/* --------------------------------------------------------------
+   Vercel‑обработчик (webhook entry‑point)
+   -------------------------------------------------------------- */
 export default async function handler(req, res) {
   if (req.method === "POST") {
-    // Telegraf expects the raw body as a Buffer
     try {
       await bot.handleUpdate(req.body, res);
-    } catch (e) {
-      console.error("⚡️ Bot error:", e);
+    } catch (err) {
+      console.error("❗ Bot error:", err);
       res.status(500).send("internal error");
     }
   } else {
-    // Simple GET for sanity check
-    res.status(200).send("Telegram bot is alive 👋");
+    // простая проверка, что функция живёт
+    res.status(200).send("Telegram bot is up 👋");
   }
 }
