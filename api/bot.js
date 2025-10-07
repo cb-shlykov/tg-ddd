@@ -1,24 +1,22 @@
-// api/bot.js
+// ──────────────────────────────────────────────────────────────────────
+//  api/bot.js  –  Telegram‑бот, Vercel Serverless Function
+// ──────────────────────────────────────────────────────────────────────
 import { Telegraf } from "telegraf";
 
-/* --------------------------------------------------------------
-   Токен бота и ID администратора – уже подставлены.
-   -------------------------------------------------------------- */
+/* ------------------------------------------------------------------
+   Токен и ID администратора – уже подставлены.
+   ------------------------------------------------------------------ */
 const BOT_TOKEN = "7964054515:AAHIU9aDGoFQkfDaplTkbVQ9_JlilcrBzYM";
-const ADMIN_ID  = 111603368;               // telegram‑user_id администратора
+const ADMIN_ID  = 111603368;               // ваш telegram‑user_id
 
-if (!BOT_TOKEN) {
-  throw new Error("BOT_TOKEN is missing!");
-}
+if (!BOT_TOKEN) throw new Error("BOT_TOKEN is missing");
 
-/* --------------------------------------------------------------
-   Инициализация бота
-   -------------------------------------------------------------- */
+// ------------------------------------------------------------------
 const bot = new Telegraf(BOT_TOKEN);
 
-/* --------------------------------------------------------------
-   Данные расписания (schedule) и дополнительной инфы (dayInfo)
-   -------------------------------------------------------------- */
+/* ------------------------------------------------------------------
+   Данные расписания (schedule) и информации о забирании/карате.
+   ------------------------------------------------------------------ */
 const schedule = [
   {
     time: "08:00-08:40",
@@ -75,9 +73,9 @@ const dayInfo = [
   { day: "Пт", endOfLessons: "11:40", pickup: "Продленка", karate: false }
 ];
 
-/* --------------------------------------------------------------
-   Вспомогательные константы и функции
-   -------------------------------------------------------------- */
+/* ------------------------------------------------------------------
+   Вспомогательные маппинги (англ. ↔ рус. названия дней)
+   ------------------------------------------------------------------ */
 const EN_RU_DAYS = {
   Monday:    "Пн",
   Tuesday:   "Вт",
@@ -96,19 +94,22 @@ const RU_EN_DAYS = {
   Сб: "Saturday"
 };
 
-// Запоминаем всех, кто когда‑либо писал боту (для рассылки)
+/* ------------------------------------------------------------------
+   ОТКРЫТЫЕ ПОЛЬЗОВАТЕЛИ – нужен для рассылки админа.
+   В продакшене лучше вынести в БД/Redis.
+   ------------------------------------------------------------------ */
 let knownUsers = new Set();
 
-/* --------------------------------------------------------------
-   Форматирование расписания
-   -------------------------------------------------------------- */
+/* ------------------------------------------------------------------
+   Форматирование (markdown‑v2) ---------------------------------------
+   ------------------------------------------------------------------ */
 function formatDaySchedule(ruDay) {
   const enDay = RU_EN_DAYS[ruDay];
   if (!enDay) return `❓ Неизвестный день «${ruDay}».`;
 
   const rows = schedule
-    .filter((r) => r[enDay])                // пропускаем пустые ячейки
-    .map((r) => `${r.time} — ${r[enDay]}`);
+    .filter(r => r[enDay])                     // убрать пустые ячейки
+    .map(r => `${r.time} — ${r[enDay]}`);
 
   return rows.length
     ? `📅 *${ruDay}*:\n` + rows.join("\n")
@@ -120,11 +121,8 @@ function formatWeekSchedule() {
   return days.map(formatDaySchedule).join("\n\n");
 }
 
-/* --------------------------------------------------------------
-   Форматирование информации о забирании/карате
-   -------------------------------------------------------------- */
 function formatPickupInfo(ruDay) {
-  const info = dayInfo.find((i) => i.day === ruDay);
+  const info = dayInfo.find(i => i.day === ruDay);
   if (!info) return `❓ Нет данных для дня ${ruDay}.`;
 
   const karate = info.karate === false ? "❌ нет" : `🕒 ${info.karate}`;
@@ -136,115 +134,150 @@ function formatPickupInfo(ruDay) {
   );
 }
 
-/* --------------------------------------------------------------
-   Команды бота
-   -------------------------------------------------------------- */
-bot.start((ctx) => {
+function formatWeekPickup() {
+  return dayInfo.map(i => formatPickupInfo(i.day)).join("\n\n");
+}
+
+/* ------------------------------------------------------------------
+   Инлайн‑клавиатуры ---------------------------------------------------
+   ------------------------------------------------------------------ */
+function mainMenuKeyboard(isAdmin) {
+  const buttons = [
+    [{ text: "📅 Расписание на неделю", callback_data: "menu_schedule_week" }],
+    [{ text: "📅 Расписание на день",   callback_data: "menu_schedule_day" }],
+    [{ text: "🗓️ График на неделю",    callback_data: "menu_pickup_week" }],
+    [{ text: "🗓️ График на день",      callback_data: "menu_pickup_day" }]
+  ];
+
+  if (isAdmin) {
+    buttons.push([{ text: "🔔 Уведомить об обновлении", callback_data: "admin_notify" }]);
+  }
+
+  // кнопка «Назад» будет добавлена в подменю, а не в главном меню
+  return { inline_keyboard: buttons };
+}
+
+function daysKeyboard(prefix) {
+  // prefix – что будет в callback_data перед названием дня
+  const dayButtons = ["Пн", "Вт", "Ср", "Чт", "Пт"].map(d => ({
+    text: d,
+    callback_data: `${prefix}_${d}`
+  }));
+
+  // раскладываем по 3/2 кнопки для удобства
+  return {
+    inline_keyboard: [
+      dayButtons.slice(0, 3),
+      dayButtons.slice(3, 5).concat([{ text: "↩️ Назад", callback_data: "back_main" }])
+    ]
+  };
+}
+
+/* ------------------------------------------------------------------
+   Обработчики ---------------------------------------------------------
+   ------------------------------------------------------------------ */
+bot.start(ctx => {
   knownUsers.add(ctx.from.id);
   ctx.reply(
     `👋 Привет, ${ctx.from.first_name}!\n` +
-    `Я — бот‑ассистент школы.\n\n` +
-    `📚 Доступные команды:\n` +
-    `/schedule — расписание на всю неделю\n` +
-    `/schedule <день> — расписание на конкретный день (Пн‑Пт)\n` +
-    `/pickup — кто и когда забирает ребёнка + карате\n` +
-    `/pickup <день> — та же информация только для выбранного дня\n` +
-    (ctx.from.id === ADMIN_ID ? `/notify — рассылка «Расписание обновлено» (только админ)` : "")
+    `Выбери нужную функцию, нажимая кнопки ниже.`,
+    { reply_markup: mainMenuKeyboard(ctx.from.id === ADMIN_ID) }
   );
 });
 
-bot.command("schedule", (ctx) => {
-  const args = ctx.message.text.split(/\s+/).slice(1); // всё после /schedule
-  if (!args.length) {
-    ctx.replyWithMarkdownV2(formatWeekSchedule());
+/* ---------- Главное меню ------------------------------------------------ */
+bot.action("menu_schedule_week", async ctx => {
+  await ctx.answerCbQuery();                       // скрываем «loading»
+  await ctx.replyWithMarkdownV2(formatWeekSchedule(), {
+    reply_markup: { inline_keyboard: [[{ text: "↩️ Назад", callback_data: "back_main" }]] }
+  });
+});
+
+bot.action("menu_schedule_day", async ctx => {
+  await ctx.answerCbQuery();
+  await ctx.reply("Выбери день недели:", { reply_markup: daysKeyboard("schedule") });
+});
+
+bot.action("menu_pickup_week", async ctx => {
+  await ctx.answerCbQuery();
+  await ctx.replyWithMarkdownV2(formatWeekPickup(), {
+    reply_markup: { inline_keyboard: [[{ text: "↩️ Назад", callback_data: "back_main" }]] }
+  });
+});
+
+bot.action("menu_pickup_day", async ctx => {
+  await ctx.answerCbQuery();
+  await ctx.reply("Выбери день недели:", { reply_markup: daysKeyboard("pickup") });
+});
+
+/* ---------- Выбор отдельного дня --------------------------------------- */
+bot.action(/^schedule_(\p{L}{2})$/u, async ctx => {
+  const ruDay = ctx.match[1];
+  await ctx.answerCbQuery();
+  await ctx.replyWithMarkdownV2(formatDaySchedule(ruDay), {
+    reply_markup: { inline_keyboard: [[{ text: "↩️ Назад", callback_data: "back_main" }]] }
+  });
+});
+
+bot.action(/^pickup_(\p{L}{2})$/u, async ctx => {
+  const ruDay = ctx.match[1];
+  await ctx.answerCbQuery();
+  await ctx.replyWithMarkdownV2(formatPickupInfo(ruDay), {
+    reply_markup: { inline_keyboard: [[{ text: "↩️ Назад", callback_data: "back_main" }]] }
+  });
+});
+
+/* ---------- Возврат в главное меню ----------------------------------- */
+bot.action("back_main", async ctx => {
+  await ctx.answerCbQuery();
+  await ctx.editMessageText(
+    "Главное меню:",
+    { reply_markup: mainMenuKeyboard(ctx.from.id === ADMIN_ID) }
+  );
+});
+
+/* ---------- Уведомление админа ---------------------------------------- */
+bot.action("admin_notify", async ctx => {
+  if (ctx.from.id !== ADMIN_ID) {
+    await ctx.answerCbQuery("Эта кнопка только для администратора", { show_alert: true });
     return;
   }
 
-  const raw = args[0].trim();
-  const ruDay = Object.keys(RU_EN_DAYS).find(
-    (d) => d.toLowerCase() === raw.toLowerCase()
-  );
+  await ctx.answerCbQuery(); // скрываем «loading»
 
-  if (!ruDay) {
-    return ctx.reply(`❓ Неверный день: ${raw}. Пиши Пн, Вт, Ср, Чт, Пт`);
-  }
-
-  ctx.replyWithMarkdownV2(formatDaySchedule(ruDay));
-});
-
-bot.command("pickup", (ctx) => {
-  const args = ctx.message.text.split(/\s+/).slice(1);
-  if (!args.length) {
-    const all = dayInfo.map((i) => formatPickupInfo(i.day)).join("\n\n");
-    return ctx.replyWithMarkdownV2(all);
-  }
-
-  const raw = args[0].trim();
-  const ruDay = Object.keys(RU_EN_DAYS).find(
-    (d) => d.toLowerCase() === raw.toLowerCase()
-  );
-
-  if (!ruDay) {
-    return ctx.reply(`❓ Неверный день: ${raw}. Пиши Пн, Вт, Ср, Чт, Пт`);
-  }
-
-  ctx.replyWithMarkdownV2(formatPickupInfo(ruDay));
-});
-
-/* --------------------------------------------------------------
-   Команда админа – рассылка "Расписание обновлено"
-   -------------------------------------------------------------- */
-bot.command("notify", async (ctx) => {
-  if (ctx.from.id !== ADMIN_ID) {
-    return ctx.reply("🚫 Эта команда доступна только администратору.");
-  }
-
-  const text = "🔔 *Расписание обновлено!* Проверьте актуальные данные командой /schedule.";
-  const promises = [...knownUsers].map((uid) =>
+  const text = "🔔 *Расписание обновлено!* Проверьте актуальные данные кнопками в боте.";
+  const promises = [...knownUsers].map(uid =>
     ctx.telegram.sendMessage(uid, text, { parse_mode: "MarkdownV2" })
   );
 
   const results = await Promise.allSettled(promises);
-  const ok = results.filter((r) => r.status === "fulfilled").length;
+  const ok = results.filter(r => r.status === "fulfilled").length;
   const fail = results.length - ok;
 
-  ctx.reply(`✅ Оповещение отправлено ${ok} пользователям, не удалось ${fail}.`);
+  await ctx.reply(`✅ Оповещение отправлено ${ok} пользователям, не удалось ${fail}.`);
 });
 
-/* --------------------------------------------------------------
-   Любой другой ввод – подсказываем доступные команды
-   -------------------------------------------------------------- */
-bot.on("text", (ctx) => {
-  ctx.reply(
-    "❓ Не понял команду. Доступные команды:\n" +
-    "/schedule, /schedule Пн, /pickup, /pickup Пт" +
-    (ctx.from.id === ADMIN_ID ? "\n/notify (только админ)" : ""),
-    {
-      reply_markup: {
-        keyboard: [
-          [{ text: "🗓️ Расписание на неделю" }, { text: "🗓️ Расписание на Пн" }],
-          [{ text: "📦 Кто забирает?" }, { text: "🥋 Карате?" }]
-        ],
-        resize_keyboard: true,
-        one_time_keyboard: false
-      }
-    }
+/* ---------- Любой нераспознанный ввод --------------------------------- */
+bot.on("text", async ctx => {
+  await ctx.reply(
+    "❓ Выберите действие, используя кнопки ниже.",
+    { reply_markup: mainMenuKeyboard(ctx.from.id === ADMIN_ID) }
   );
 });
 
-/* --------------------------------------------------------------
-   Vercel‑обработчик (webhook entry‑point)
-   -------------------------------------------------------------- */
+/* ------------------------------------------------------------------
+   Vercel‑handler (webhook entry‑point)
+   ------------------------------------------------------------------ */
 export default async function handler(req, res) {
   if (req.method === "POST") {
     try {
-      await bot.handleUpdate(req.body, res);
-    } catch (err) {
-      console.error("❗ Bot error:", err);
+      await bot.handleUpdate(req.body, res);   // Telegraf принимает обычный объект update
+    } catch (e) {
+      console.error("Bot error:", e);
       res.status(500).send("internal error");
     }
   } else {
-    // простая проверка, что функция живёт
-    res.status(200).send("Telegram bot is up 👋");
+    // простая проверка, что функция работает
+    res.status(200).send("Telegram bot is alive 👋");
   }
 }
