@@ -5,91 +5,67 @@ import { Telegraf } from "telegraf";
 import getRawBody from "raw-body";
 
 /* ======================  CONFIG  ====================== */
-const BOT_TOKEN = "7964054515:AAHIU9aDGoFQkfDaplTkbVQ9_JlilcrBzYM";
-const ADMIN_ID  = 111603368;               // ваш telegram‑user_id
+const BOT_TOKEN = "7964054515:AAHIU9aDGoFQkfDaplTkbVQ9_JlilcrBzYM"; // ваш токен
+const ADMIN_ID  = 111603368;                                      // ваш Telegram‑user_id
 
 if (!BOT_TOKEN) throw new Error("BOT_TOKEN is missing");
 const bot = new Telegraf(BOT_TOKEN);
 
-/* ======================  DATA  ====================== */
+/* ======================  ДАННЫЕ  ====================== */
 const schedule = [
-{
-      "time": "08:00-08:40",
-      "Monday":    "Разговоры о важном",
-      "Tuesday":   "Литература",
-      "Wednesday": "Физ-ра",
-      "Thursday":  "Русский язык",
-      "Friday":    "Окруж. мир",
-      "Saturday":  "Окруж. мир"
-    },
-    {
-      "time": "08:50-09:30",
-      "Monday":    "Литература",
-      "Tuesday":   "Русский язык",
-      "Wednesday": "Литература",
-      "Thursday":  "Математика",
-      "Friday":    "Математика",
-      "Saturday":  "Математика"
-    },
-    {
-      "time": "09:45-10:25",
-      "Monday":    "Музыка",
-      "Tuesday":   "Ритмика",
-      "Wednesday": "Окруж. мир",
-      "Thursday":  "Ритмика",
-      "Friday":    "Физ-ра",
-      "Saturday":  "Физ-ра"
-    },
-    {
-      "time": "10:45-11:25",
-      "Monday":    "Ритмика",
-      "Tuesday":   "Математика",
-      "Wednesday": "Русский язык",
-      "Thursday":  "Труд",
-      "Friday":    null,
-      "Saturday":  null
-    },
-    {
-      "time": "11:45-12:25",
-      "Monday":    "Русский язык",
-      "Tuesday":   null,
-      "Wednesday": null,
-      "Thursday":  null,
-      "Friday":    null,
-      "Saturday":  null
-    }
+  {
+    time: "08:00-08:40",
+    Monday:    "Разговоры о важном",
+    Tuesday:   "Литература",
+    Wednesday: "Физ-ра",
+    Thursday:  "Русский язык",
+    Friday:    "Окруж. мир",
+    Saturday:  "Окруж. мир"
+  },
+  {
+    time: "08:50-09:30",
+    Monday:    "Литература",
+    Tuesday:   "Русский язык",
+    Wednesday: "Литература",
+    Thursday:  "Математика",
+    Friday:    "Математика",
+    Saturday:  "Математика"
+  },
+  {
+    time: "09:45-10:25",
+    Monday:    "Музыка",
+    Tuesday:   "Ритмика",
+    Wednesday: "Окруж. мир",
+    Thursday:  "Ритмика",
+    Friday:    "Физ-ра",
+    Saturday:  "Физ-ра"
+  },
+  {
+    time: "10:45-11:25",
+    Monday:    "Ритмика",
+    Tuesday:   "Математика",
+    Wednesday: "Русский язык",
+    Thursday:  "Труд",
+    Friday:    null,
+    Saturday:  null
+  },
+  {
+    time: "11:45-12:25",
+    Monday:    "Русский язык",
+    Tuesday:   null,
+    Wednesday: null,
+    Thursday:  null,
+    Friday:    null,
+    Saturday:  null
+  }
 ];
+
 const dayInfo = [
-{
-      "day": "Пн",
-      "endOfLessons": "11:40",
-      "pickup": "Бабушка",
-      "karate": false
-    },
-    {
-      "day": "Вт",
-      "endOfLessons": "11:40",
-      "pickup": "Бабушка",
-      "karate": "16:30"
-    },
-    {
-      "day": "Ср",
-      "endOfLessons": "11:40",
-      "pickup": "Продленка",
-      "karate": false
-    },
-    {
-      "day": "Чт",
-      "endOfLessons": "11:40",
-      "pickup": "Бабушка",
-      "karate": "16:30"
-    },
-    {
-      "day": "Пт",
-      "endOfLessons": "11:40",
-      "pickup": "Продленка",
-      "karate": false
-    }
+  { day: "Пн", endOfLessons: "11:40", pickup: "Бабушка", karate: false },
+  { day: "Вт", endOfLessons: "11:40", pickup: "Бабушка", karate: "16:30" },
+  { day: "Ср", endOfLessons: "11:40", pickup: "Продленка", karate: false },
+  { day: "Чт", endOfLessons: "11:40", pickup: "Бабушка", karate: "16:30" },
+  { day: "Пт", endOfLessons: "11:40", pickup: "Продленка", karate: false }
 ];
 
 /* ======================  HELPERS  ====================== */
@@ -111,25 +87,33 @@ const RU_EN_DAYS = {
   Сб: "Saturday"
 };
 
-let knownUsers = new Set();               // для рассылки
+/* Хранилище id всех, кто когда‑‑либо стартовал бота (для рассылки) */
+let knownUsers = new Set();
 
+/* ---- Форматирование расписания ---- */
 function formatDaySchedule(ruDay) {
   const enDay = RU_EN_DAYS[ruDay];
   if (!enDay) return `❓ Неизвестный день «${ruDay}».`;
+
   const rows = schedule
     .filter(r => r[enDay])
     .map(r => `${r.time} — ${r[enDay]}`);
+
   return rows.length
     ? `📅 *${ruDay}*:\n` + rows.join("\n")
     : `📅 *${ruDay}* — занятий нет.`;
 }
+
 function formatWeekSchedule() {
   const days = ["Пн", "Вт", "Ср", "Чт", "Пт"];
   return days.map(formatDaySchedule).join("\n\n");
 }
+
+/* ---- Форматирование графика (pickup + карате) ---- */
 function formatPickupInfo(ruDay) {
   const info = dayInfo.find(i => i.day === ruDay);
   if (!info) return `❓ Нет данных для дня ${ruDay}.`;
+
   const karate = info.karate === false ? "❌ нет" : `🕒 ${info.karate}`;
   return (
     `📌 *${ruDay}*:\n` +
@@ -138,21 +122,26 @@ function formatPickupInfo(ruDay) {
     `🥋 Карате: ${karate}`
   );
 }
+
 function formatWeekPickup() {
   return dayInfo.map(i => formatPickupInfo(i.day)).join("\n\n");
 }
 
-/* -------------------  INLINE KEYBOARDS  ------------------- */
+/* ======================  КЛАВИАТУРЫ  ====================== */
 function mainMenuKeyboard(isAdmin) {
   const btns = [
-    [{ text: "📅 Расписание на неделю", callback_data: "schedule_week" }],
-    [{ text: "📅 Расписание на день",   callback_data: "schedule_day" }],
-    [{ text: "🗓️ График на неделю",    callback_data: "pickup_week" }],
-    [{ text: "🗓️ График на день",      callback_data: "pickup_day" }]
+    [{ text: "📅 Расписание на неделю",   callback_data: "schedule_week" }],
+    [{ text: "📅 Расписание на день",     callback_data: "schedule_day" }],
+    [{ text: "🗓️ График на неделю",      callback_data: "pickup_week" }],
+    [{ text: "🗓️ График на день",        callback_data: "pickup_day" }]
   ];
-  if (isAdmin) btns.push([{ text: "🔔 Уведомить об обновлении", callback_data: "admin_notify" }]);
+  if (isAdmin) {
+    btns.push([{ text: "🔔 Уведомить об обновлении", callback_data: "admin_notify" }]);
+  }
   return { inline_keyboard: btns };
 }
+
+/* Клавиатура выбора дней: prefix – "schedule" или "pickup" */
 function daysKeyboard(prefix) {
   const dayBtns = ["Пн", "Вт", "Ср", "Чт", "Пт"].map(d => ({
     text: d,
@@ -166,45 +155,53 @@ function daysKeyboard(prefix) {
   };
 }
 
-/* -------------------  LOGGING & DEBUG  ------------------- */
+/* ======================  LOGGING ====================== */
 bot.use((ctx, next) => {
   console.log("🟢 Update type:", ctx.updateType);
   console.log("🔎 Payload:", JSON.stringify(ctx.update, null, 2));
   return next();
 });
 
-/* -------------------  BOT COMMANDS  ------------------- */
+/* ======================  БОТ‑КОМАНДЫ ====================== */
 bot.start(ctx => {
   knownUsers.add(ctx.from.id);
   ctx.reply(
-    `👋 Привет, ${ctx.from.first_name}!\nВыбери действие, нажимая кнопки ниже.`,
+    `👋 Привет, ${ctx.from.first_name}!\n` +
+    `Выбери действие, нажимая кнопки ниже.`,
     { reply_markup: mainMenuKeyboard(ctx.from.id === ADMIN_ID) }
   );
 });
 
-/* ---------- Главное меню ---------- */
+/* ----------- Главное меню ----------- */
 bot.action("schedule_week", async ctx => {
-  await ctx.answerCbQuery();
+  await ctx.answerCbQuery();   // ✅ подтверждаем запрос
   await ctx.replyWithMarkdownV2(formatWeekSchedule(), {
     reply_markup: { inline_keyboard: [[{ text: "↩️ Назад", callback_data: "back_main" }]] }
   });
 });
+
 bot.action("schedule_day", async ctx => {
   await ctx.answerCbQuery();
-  await ctx.reply("Выбери день недели:", { reply_markup: daysKeyboard("schedule") });
+  await ctx.reply("Выбери день недели:", {
+    reply_markup: daysKeyboard("schedule")
+  });
 });
+
 bot.action("pickup_week", async ctx => {
   await ctx.answerCbQuery();
   await ctx.replyWithMarkdownV2(formatWeekPickup(), {
     reply_markup: { inline_keyboard: [[{ text: "↩️ Назад", callback_data: "back_main" }]] }
   });
 });
+
 bot.action("pickup_day", async ctx => {
   await ctx.answerCbQuery();
-  await ctx.reply("Выбери день недели:", { reply_markup: daysKeyboard("pickup") });
+  await ctx.reply("Выбери день недели:", {
+    reply_markup: daysKeyboard("pickup")
+  });
 });
 
-/* ---------- Выбор отдельного дня ---------- */
+/* ----------- Выбор конкретного дня ----------- */
 bot.action(/^schedule_(\p{L}{2})$/u, async ctx => {
   const ruDay = ctx.match[1];
   await ctx.answerCbQuery();
@@ -212,6 +209,7 @@ bot.action(/^schedule_(\p{L}{2})$/u, async ctx => {
     reply_markup: { inline_keyboard: [[{ text: "↩️ Назад", callback_data: "back_main" }]] }
   });
 });
+
 bot.action(/^pickup_(\p{L}{2})$/u, async ctx => {
   const ruDay = ctx.match[1];
   await ctx.answerCbQuery();
@@ -220,7 +218,7 @@ bot.action(/^pickup_(\p{L}{2})$/u, async ctx => {
   });
 });
 
-/* ---------- Возврат в главное меню ---------- */
+/* ----------- Возврат в главное меню ----------- */
 bot.action("back_main", async ctx => {
   await ctx.answerCbQuery();
   await ctx.editMessageText("Главное меню:", {
@@ -228,24 +226,28 @@ bot.action("back_main", async ctx => {
   });
 });
 
-/* ---------- Уведомление админа ---------- */
+/* ----------- Уведомление админа ----------- */
 bot.action("admin_notify", async ctx => {
   if (ctx.from.id !== ADMIN_ID) {
     await ctx.answerCbQuery("Эта кнопка только для администратора", { show_alert: true });
     return;
   }
-  await ctx.answerCbQuery();
-  const text = "🔔 *Расписание обновлено!* Проверьте свежие данные в боте.";
+
+  await ctx.answerCbQuery(); // ✅ запрос обработан
+
+  const text = "🔔 *Расписание обновлено!* Проверьте актуальные данные в боте.";
   const promises = [...knownUsers].map(uid =>
     ctx.telegram.sendMessage(uid, text, { parse_mode: "MarkdownV2" })
   );
+
   const results = await Promise.allSettled(promises);
   const ok = results.filter(r => r.status === "fulfilled").length;
   const fail = results.length - ok;
+
   await ctx.reply(`✅ Оповещение отправлено ${ok} пользователям, не удалось ${fail}.`);
 });
 
-/* ---------- Любой текст ---------- */
+/* ----------- Любой текст (fallback) ----------- */
 bot.on("text", async ctx => {
   await ctx.reply(
     "❓ Выберите действие, используя кнопки ниже.",
@@ -253,22 +255,28 @@ bot.on("text", async ctx => {
   );
 });
 
-/* --------------------------------------------------------------
-   VERCEL HANDLER (webhook entry‑point)
-   -------------------------------------------------------------- */
+/* ======================  VERCEL HANDLER ====================== */
 export default async function handler(req, res) {
+  // Telegram отправляет только POST‑запросы
   if (req.method !== "POST") {
     return res.status(200).send("Telegram bot is alive 👋");
   }
 
   try {
+    // 1️⃣ Получаем «сырой» буфер тела запроса
     const raw = await getRawBody(req, {
       length: req.headers["content-length"],
       limit: "1mb",
-      encoding: true
+      encoding: true // получаем строку JSON
     });
+
+    // 2️⃣ Преобразуем в объект, который понимает Telegraf
     const update = JSON.parse(raw);
+
+    // 3️⃣ Обрабатываем обновление
     await bot.handleUpdate(update);
+
+    // 4️⃣ Обязательно отвечаем 200 OK, иначе Telegram будет считать, что запрос провален
     res.status(200).send("ok");
   } catch (err) {
     console.error("❗ Bot error:", err);
@@ -276,11 +284,9 @@ export default async function handler(req, res) {
   }
 }
 
-/* --------------------------------------------------------------
-   Отключаем автоматический парсер Vercel (это важно!)
-   -------------------------------------------------------------- */
+/* ------------------- Отключаем автопарсер Vercel ------------------- */
 export const config = {
   api: {
-    bodyParser: false
+    bodyParser: false   // <‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑
   }
 };
