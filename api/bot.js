@@ -61,9 +61,9 @@ const schedule = [
 
 const dayInfo = [
   { day: "Пн", endOfLessons: "11:40", pickup: "Бабушка", karate: false },
-  { day: "Вт", endOfLessons: "11:40", pickup: "Бабушка", karate: "16:30" },
+  { day: "Вт", endOfLessons: "11:40", pickup: "Бабушка", karate: false },
   { day: "Ср", endOfLessons: "11:40", pickup: "Продленка", karate: false },
-  { day: "Чт", endOfLessons: "11:40", pickup: "Бабушка", karate: "16:30" },
+  { day: "Чт", endOfLessons: "11:40", pickup: "Бабушка", karate: false },
   { day: "Пт", endOfLessons: "11:40", pickup: "Продленка", karate: false }
 ];
 
