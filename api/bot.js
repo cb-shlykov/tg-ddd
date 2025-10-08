@@ -13,10 +13,83 @@ const bot = new Telegraf(BOT_TOKEN);
 
 /* ======================  DATA  ====================== */
 const schedule = [
-  /* … (ваш массив schedule) … */
+{
+      "time": "08:00-08:40",
+      "Monday":    "Разговоры о важном",
+      "Tuesday":   "Литература",
+      "Wednesday": "Физ-ра",
+      "Thursday":  "Русский язык",
+      "Friday":    "Окруж. мир",
+      "Saturday":  "Окруж. мир"
+    },
+    {
+      "time": "08:50-09:30",
+      "Monday":    "Литература",
+      "Tuesday":   "Русский язык",
+      "Wednesday": "Литература",
+      "Thursday":  "Математика",
+      "Friday":    "Математика",
+      "Saturday":  "Математика"
+    },
+    {
+      "time": "09:45-10:25",
+      "Monday":    "Музыка",
+      "Tuesday":   "Ритмика",
+      "Wednesday": "Окруж. мир",
+      "Thursday":  "Ритмика",
+      "Friday":    "Физ-ра",
+      "Saturday":  "Физ-ра"
+    },
+    {
+      "time": "10:45-11:25",
+      "Monday":    "Ритмика",
+      "Tuesday":   "Математика",
+      "Wednesday": "Русский язык",
+      "Thursday":  "Труд",
+      "Friday":    null,
+      "Saturday":  null
+    },
+    {
+      "time": "11:45-12:25",
+      "Monday":    "Русский язык",
+      "Tuesday":   null,
+      "Wednesday": null,
+      "Thursday":  null,
+      "Friday":    null,
+      "Saturday":  null
+    }
 ];
 const dayInfo = [
-  /* … (ваш массив dayInfo) … */
+{
+      "day": "Пн",
+      "endOfLessons": "11:40",
+      "pickup": "Бабушка",
+      "karate": false
+    },
+    {
+      "day": "Вт",
+      "endOfLessons": "11:40",
+      "pickup": "Бабушка",
+      "karate": "16:30"
+    },
+    {
+      "day": "Ср",
+      "endOfLessons": "11:40",
+      "pickup": "Продленка",
+      "karate": false
+    },
+    {
+      "day": "Чт",
+      "endOfLessons": "11:40",
+      "pickup": "Бабушка",
+      "karate": "16:30"
+    },
+    {
+      "day": "Пт",
+      "endOfLessons": "11:40",
+      "pickup": "Продленка",
+      "karate": false
+    }
 ];
 
 /* ======================  HELPERS  ====================== */
