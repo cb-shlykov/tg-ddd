@@ -23,44 +23,39 @@ const schedule = [
     Tuesday:   "Литература",
     Wednesday: "Физ-ра",
     Thursday:  "Русский язык",
-    Friday:    "Окруж. мир",
-    Saturday:  "Окруж. мир"
+    Friday:    "Физ-рар"
   },
   {
-    time: "08:50-09:30",
+    time: "09:90-09:40",
     Monday:    "Литература",
     Tuesday:   "Русский язык",
     Wednesday: "Литература",
     Thursday:  "Математика",
-    Friday:    "Математика",
-    Saturday:  "Математика"
+    Friday:    "Математика"
   },
   {
-    time: "09:45-10:25",
+    time: "10:00-10:50",
     Monday:    "Музыка",
-    Tuesday:   "Ритмика",
-    Wednesday: "Окруж. мир",
-    Thursday:  "Ритмика",
-    Friday:    "Физ-ра",
-    Saturday:  "Физ-ра"
+    Tuesday:   "Динамическая пауза",
+    Wednesday: "Динам. пауза/Окруж. мир",
+    Thursday:  "Динам. пауза/Ритмика",
+    Friday:    "Окруж. мир"
   },
   {
-    time: "10:45-11:25",
-    Monday:    "Ритмика",
+    time: "11:00-11:40",
+    Monday:    "Динам. пауза/Ритмика",
     Tuesday:   "Математика",
     Wednesday: "Русский язык",
     Thursday:  "Труд",
-    Friday:    null,
-    Saturday:  null
+    Friday:    null
   },
   {
-    time: "11:45-12:25",
+    time: "12:00-12:40",
     Monday:    "Русский язык",
     Tuesday:   null,
     Wednesday: null,
     Thursday:  null,
-    Friday:    null,
-    Saturday:  null
+    Friday:    null
   }
 ];
 
@@ -80,8 +75,7 @@ const EN_RU_DAYS = {
   Tuesday:   "Вт",
   Wednesday: "Ср",
   Thursday:  "Чт",
-  Friday:    "Пт",
-  Saturday:  "Сб"
+  Friday:    "Пт"
 };
 
 const RU_EN_DAYS = {
@@ -89,8 +83,7 @@ const RU_EN_DAYS = {
   Вт: "Tuesday",
   Ср: "Wednesday",
   Чт: "Thursday",
-  Пт: "Friday",
-  Сб: "Saturday"
+  Пт: "Friday"
 };
 
 /* ------------------------------------------------------------------
