@@ -13,59 +13,10 @@ const bot = new Telegraf(BOT_TOKEN);
 
 /* ======================  DATA  ====================== */
 const schedule = [
-  {
-    time: "08:00-08:40",
-    Monday:    "Разговоры о важном",
-    Tuesday:   "Литература",
-    Wednesday: "Физ-ра",
-    Thursday:  "Русский язык",
-    Friday:    "Окруж. мир",
-    Saturday:  "Окруж. мир"
-  },
-  {
-    time: "08:50-09:30",
-    Monday:    "Литература",
-    Tuesday:   "Русский язык",
-    Wednesday: "Литература",
-    Thursday:  "Математика",
-    Friday:    "Математика",
-    Saturday:  "Математика"
-  },
-  {
-    time: "09:45-10:25",
-    Monday:    "Музыка",
-    Tuesday:   "Ритмика",
-    Wednesday: "Окруж. мир",
-    Thursday:  "Ритмика",
-    Friday:    "Физ-ра",
-    Saturday:  "Физ-ра"
-  },
-  {
-    time: "10:45-11:25",
-    Monday:    "Ритмика",
-    Tuesday:   "Математика",
-    Wednesday: "Русский язык",
-    Thursday:  "Труд",
-    Friday:    null,
-    Saturday:  null
-  },
-  {
-    time: "11:45-12:25",
-    Monday:    "Русский язык",
-    Tuesday:   null,
-    Wednesday: null,
-    Thursday:  null,
-    Friday:    null,
-    Saturday:  null
-  }
+  /* … (ваш массив schedule) … */
 ];
-
 const dayInfo = [
-  { day: "Пн", endOfLessons: "11:40", pickup: "Бабушка", karate: false },
-  { day: "Вт", endOfLessons: "11:40", pickup: "Бабушка", karate: "16:30" },
-  { day: "Ср", endOfLessons: "11:40", pickup: "Продленка", karate: false },
-  { day: "Чт", endOfLessons: "11:40", pickup: "Бабушка", karate: "16:30" },
-  { day: "Пт", endOfLessons: "11:40", pickup: "Продленка", karate: false }
+  /* … (ваш массив dayInfo) … */
 ];
 
 /* ======================  HELPERS  ====================== */
@@ -145,8 +96,7 @@ function daysKeyboard(prefix) {
 /* -------------------  LOGGING & DEBUG  ------------------- */
 bot.use((ctx, next) => {
   console.log("🟢 Update type:", ctx.updateType);
-  // Полный объект полностью виден в логах Vercel, удобно для отладки
-  console.log("🔎 Update payload:", JSON.stringify(ctx.update, null, 2));
+  console.log("🔎 Payload:", JSON.stringify(ctx.update, null, 2));
   return next();
 });
 
@@ -161,7 +111,7 @@ bot.start(ctx => {
 
 /* ---------- Главное меню ---------- */
 bot.action("schedule_week", async ctx => {
-  await ctx.answerCbQuery();          // ✅ подтверждаем запрос
+  await ctx.answerCbQuery();
   await ctx.replyWithMarkdownV2(formatWeekSchedule(), {
     reply_markup: { inline_keyboard: [[{ text: "↩️ Назад", callback_data: "back_main" }]] }
   });
@@ -211,18 +161,14 @@ bot.action("admin_notify", async ctx => {
     await ctx.answerCbQuery("Эта кнопка только для администратора", { show_alert: true });
     return;
   }
-
-  await ctx.answerCbQuery(); // ✅ запрос обработан
-
+  await ctx.answerCbQuery();
   const text = "🔔 *Расписание обновлено!* Проверьте свежие данные в боте.";
   const promises = [...knownUsers].map(uid =>
     ctx.telegram.sendMessage(uid, text, { parse_mode: "MarkdownV2" })
   );
-
   const results = await Promise.allSettled(promises);
   const ok = results.filter(r => r.status === "fulfilled").length;
   const fail = results.length - ok;
-
   await ctx.reply(`✅ Оповещение отправлено ${ok} пользователям, не удалось ${fail}.`);
 });
 
@@ -243,20 +189,13 @@ export default async function handler(req, res) {
   }
 
   try {
-    // 1️⃣ Получаем «сырой» буфер тела запроса
     const raw = await getRawBody(req, {
       length: req.headers["content-length"],
       limit: "1mb",
-      encoding: true               // получаем строку JSON
+      encoding: true
     });
-
-    // 2️⃣ Преобразуем в объект, который понимает Telegraf
     const update = JSON.parse(raw);
-
-    // 3️⃣ Передаём объект в Telegraf
     await bot.handleUpdate(update);
-
-    // 4️⃣ Обязательно отвечаем 200, иначе Telegram будет считать, что запрос провален
     res.status(200).send("ok");
   } catch (err) {
     console.error("❗ Bot error:", err);
@@ -269,6 +208,6 @@ export default async function handler(req, res) {
    -------------------------------------------------------------- */
 export const config = {
   api: {
-    bodyParser: false   // <‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑-
+    bodyParser: false
   }
 };
