@@ -14,7 +14,7 @@ if (!BOT_TOKEN) throw new Error("BOT_TOKEN is missing");
 const bot = new Telegraf(BOT_TOKEN);
 
 /* ------------------------------------------------------------------
-   DEMO DATA (schedule & dayInfo)
+   ДЕМОДАННЫЕ (обновлённые массивы)
    ------------------------------------------------------------------ */
 const schedule = [
   {
@@ -68,14 +68,15 @@ const dayInfo = [
 ];
 
 /* ------------------------------------------------------------------
-   DAY MAPPINGS
+   Маппинг названий дней
    ------------------------------------------------------------------ */
 const EN_RU_DAYS = {
   Monday:    "Пн",
   Tuesday:   "Вт",
   Wednesday: "Ср",
   Thursday:  "Чт",
-  Friday:    "Пт"
+  Friday:    "Пт",
+  Saturday:  "Сб"
 };
 
 const RU_EN_DAYS = {
@@ -83,17 +84,18 @@ const RU_EN_DAYS = {
   Вт: "Tuesday",
   Ср: "Wednesday",
   Чт: "Thursday",
-  Пт: "Friday"
+  Пт: "Friday",
+  Сб: "Saturday"
 };
 
 /* ------------------------------------------------------------------
-   In‑memory storage
+   Хранилище
    ------------------------------------------------------------------ */
-// Пользователи, которые хотя бы раз нажали /start – нужны для рассылки.
+// Список пользователей, которые хотя бы раз нажали /start (нужен для рассылки)
 let knownUsers = new Set();
 
-// Последнее сообщение бота в каждом чате (для удаления)
-const lastBotMessage = new Map();   // chatId → message_id
+// Последнее сообщение бота в каждом чате (для удаления перед новым)
+const lastBotMessage = new Map(); // chatId → message_id
 
 /* ------------------------------------------------------------------
    Форматтеры
@@ -101,20 +103,25 @@ const lastBotMessage = new Map();   // chatId → message_id
 function formatDaySchedule(ruDay) {
   const enDay = RU_EN_DAYS[ruDay];
   if (!enDay) return `❓ Неизвестный день «${ruDay}».`;
+
   const rows = schedule
     .filter(r => r[enDay])
     .map(r => `${r.time} — ${r[enDay]}`);
+
   return rows.length
     ? `📅 *${ruDay}*:\n` + rows.join("\n")
     : `📅 *${ruDay}* — занятий нет.`;
 }
+
 function formatWeekSchedule() {
   const days = ["Пн", "Вт", "Ср", "Чт", "Пт"];
   return days.map(formatDaySchedule).join("\n\n");
 }
+
 function formatPickupInfo(ruDay) {
   const info = dayInfo.find(i => i.day === ruDay);
   if (!info) return `❓ Нет данных для дня ${ruDay}.`;
+
   const karate = info.karate === false ? "❌ нет" : `🕒 ${info.karate}`;
   return (
     `📌 *${ruDay}*:\n` +
@@ -123,12 +130,13 @@ function formatPickupInfo(ruDay) {
     `🥋 Карате: ${karate}`
   );
 }
+
 function formatWeekPickup() {
   return dayInfo.map(i => formatPickupInfo(i.day)).join("\n\n");
 }
 
 /* ------------------------------------------------------------------
-   Inline keyboards
+   Инлайн‑клавиатуры
    ------------------------------------------------------------------ */
 function mainMenuKeyboard(isAdmin) {
   const btns = [
@@ -137,11 +145,11 @@ function mainMenuKeyboard(isAdmin) {
     [{ text: "🗓️ График на неделю",      callback_data: "pickup_week" }],
     [{ text: "🗓️ График на день",        callback_data: "pickup_day" }]
   ];
-  if (isAdmin) {
-    btns.push([{ text: "🔔 Уведомить об обновлении", callback_data: "admin_notify" }]);
-  }
+  if (isAdmin) btns.push([{ text: "🔔 Уведомить об обновлении", callback_data: "admin_notify" }]);
   return { inline_keyboard: btns };
 }
+
+/* Кнопки выбора дней – префикс = "schedule" или "pickup" */
 function daysKeyboard(prefix) {
   const dayBtns = ["Пн", "Вт", "Ср", "Чт", "Пт"].map(d => ({
     text: d,
@@ -156,7 +164,7 @@ function daysKeyboard(prefix) {
 }
 
 /* ------------------------------------------------------------------
-   Логирование всех входящих обновлений
+   Логи всех входящих обновлений (для отладки)
    ------------------------------------------------------------------ */
 bot.use((ctx, next) => {
   console.log("🟢 Update type:", ctx.updateType);
@@ -174,12 +182,12 @@ bot.catch((err, ctx) => {
 /* ------------------------------------------------------------------
    Вспомогательные функции
    ------------------------------------------------------------------ */
-// 1️⃣ Экранирование markdown‑v2
+// Экранирование символов, запрещённых в MarkdownV2
 function escapeMarkdownV2(text) {
   return text.replace(/[_*[\]()~`>#+\-=|{}.!]/g, '\\$&');
 }
 
-// 2️⃣ Безопасный answerCallbackQuery (не падаем, если запрос уже «старый»)
+// Быстрый answerCallbackQuery без падения, если запрос уже «старый»
 async function safeAnswerCbQuery(ctx, txt) {
   try {
     await ctx.answerCbQuery(txt);
@@ -188,14 +196,17 @@ async function safeAnswerCbQuery(ctx, txt) {
   }
 }
 
-// 3️⃣ sendAndReplace – отправляем сообщение, удаляем предыдущее
+/* ------------------------------------------------------------------
+   sendAndReplace – отправляем новое сообщение и удаляем предыдущее
+   ------------------------------------------------------------------ */
 async function sendAndReplace(ctx, sendPromise) {
   const chatId = ctx.chat?.id;
-  const message = await sendPromise;          // Message объект
+  const message = await sendPromise;          // объект Message от Telegram
+
   if (chatId) {
     const prevId = lastBotMessage.get(chatId);
     if (prevId && prevId !== message.message_id) {
-      // пытаемся удалить старое сообщение, ошибки игнорируем
+      // удаляем предыдущее сообщение бота, игнорируем ошибки
       ctx.telegram.deleteMessage(chatId, prevId).catch(() => {});
     }
     lastBotMessage.set(chatId, message.message_id);
@@ -203,7 +214,10 @@ async function sendAndReplace(ctx, sendPromise) {
   return message;
 }
 
-// 4️⃣ safeReply – обёртка над ctx.reply / ctx.replyWithMarkdownV2
+/* ------------------------------------------------------------------
+   safeReply – обёртка над ctx.reply/ctx.replyWithMarkdownV2,
+   автоматически удаляет предыдущее сообщение бота
+   ------------------------------------------------------------------ */
 async function safeReply(ctx, text, opts = {}) {
   const safeText = typeof text === "string" ? escapeMarkdownV2(text) : text;
   try {
@@ -217,9 +231,11 @@ async function safeReply(ctx, text, opts = {}) {
 /* ------------------------------------------------------------------
    /start
    ------------------------------------------------------------------ */
-bot.start(ctx => {
+bot.start(async ctx => {
   knownUsers.add(ctx.from.id);
-  ctx.reply(
+  // используем safeReply, чтобы сообщение попало в lastBotMessage
+  await safeReply(
+    ctx,
     `👋 Привет, ${ctx.from.first_name}!\nВыбери действие, нажимая кнопки ниже.`,
     { reply_markup: mainMenuKeyboard(ctx.from.id === ADMIN_ID) }
   );
@@ -239,7 +255,8 @@ bot.action("schedule_week", async ctx => {
 
 bot.action("schedule_day", async ctx => {
   await safeAnswerCbQuery(ctx);
-  await ctx.reply("Выбери день недели:", {
+  // тоже через safeReply, чтобы это сообщение стало «последним»
+  await safeReply(ctx, "Выбери день недели:", {
     reply_markup: daysKeyboard("schedule")
   });
 });
@@ -258,7 +275,7 @@ bot.action("pickup_week", async ctx => {
 
 bot.action("pickup_day", async ctx => {
   await safeAnswerCbQuery(ctx);
-  await ctx.reply("Выбери день недели:", {
+  await safeReply(ctx, "Выбери день недели:", {
     reply_markup: daysKeyboard("pickup")
   });
 });
@@ -290,7 +307,7 @@ bot.action(/^pickup_(\p{L}{2})$/u, async ctx => {
 });
 
 /* ------------------------------------------------------------------
-   Возврат в главное меню (здесь удобнее **редактировать** предыдущее сообщение)
+   Возврат в главное меню (редактируем то же сообщение)
    ------------------------------------------------------------------ */
 bot.action("back_main", async ctx => {
   await safeAnswerCbQuery(ctx);
@@ -338,23 +355,24 @@ export default async function handler(req, res) {
   }
 
   try {
+    // Получаем «сырой» буфер тела запроса (без автопарсинга Vercel)
     const raw = await getRawBody(req, {
       length: req.headers["content-length"],
       limit: "1mb",
-      encoding: true
+      encoding: true // получаем строку JSON
     });
     const update = JSON.parse(raw);
     await bot.handleUpdate(update);
     res.status(200).send("ok");
   } catch (err) {
     console.error("❗ Bot error (handler):", err);
-    // отвечаем 200, иначе Telegram будет бесконечно повторять запрос
+    // отвечаем 200, иначе Telegram будет бесконечно пере‑отправлять запрос
     res.status(200).send("ok");
   }
 }
 
 /* ------------------------------------------------------------------
-   Отключаем автоматический парсер Vercel (нужен raw‑body)
+   Отключаем автоматический body‑parser Vercel (нужен raw‑body)
    ------------------------------------------------------------------ */
 export const config = {
   api: {
