@@ -1,22 +1,17 @@
 // ──────────────────────────────────────────────────────────────────────
-//  api/bot.js – Telegram‑бот, Vercel Serverless Function
+//  api/bot.js – Telegram‑бот, Vercel Serverless Function (Node 18)
 // ──────────────────────────────────────────────────────────────────────
 import { Telegraf } from "telegraf";
+import getRawBody from "raw-body";
 
-/* ------------------------------------------------------------------
-   Токен бота и ID администратора – уже подставлены.
-   ------------------------------------------------------------------ */
+/* ======================  CONFIG  ====================== */
 const BOT_TOKEN = "7964054515:AAHIU9aDGoFQkfDaplTkbVQ9_JlilcrBzYM";
 const ADMIN_ID  = 111603368;               // ваш telegram‑user_id
 
 if (!BOT_TOKEN) throw new Error("BOT_TOKEN is missing");
-
-// ------------------------------------------------------------------
 const bot = new Telegraf(BOT_TOKEN);
 
-/* ------------------------------------------------------------------
-   Данные расписания (schedule) и информации о забирании/карате.
-   ------------------------------------------------------------------ */
+/* ======================  DATA  ====================== */
 const schedule = [
   {
     time: "08:00-08:40",
@@ -73,9 +68,7 @@ const dayInfo = [
   { day: "Пт", endOfLessons: "11:40", pickup: "Продленка", karate: false }
 ];
 
-/* ------------------------------------------------------------------
-   Маппинг названий дней
-   ------------------------------------------------------------------ */
+/* ======================  HELPERS  ====================== */
 const EN_RU_DAYS = {
   Monday:    "Пн",
   Tuesday:   "Вт",
@@ -94,36 +87,25 @@ const RU_EN_DAYS = {
   Сб: "Saturday"
 };
 
-/* ------------------------------------------------------------------
-   Список известных пользователей (для рассылки)
-   ------------------------------------------------------------------ */
-let knownUsers = new Set();
+let knownUsers = new Set();               // для рассылки
 
-/* ------------------------------------------------------------------
-   Форматирование сообщений (MarkdownV2)
-   ------------------------------------------------------------------ */
 function formatDaySchedule(ruDay) {
   const enDay = RU_EN_DAYS[ruDay];
   if (!enDay) return `❓ Неизвестный день «${ruDay}».`;
-
   const rows = schedule
     .filter(r => r[enDay])
     .map(r => `${r.time} — ${r[enDay]}`);
-
   return rows.length
     ? `📅 *${ruDay}*:\n` + rows.join("\n")
     : `📅 *${ruDay}* — занятий нет.`;
 }
-
 function formatWeekSchedule() {
   const days = ["Пн", "Вт", "Ср", "Чт", "Пт"];
   return days.map(formatDaySchedule).join("\n\n");
 }
-
 function formatPickupInfo(ruDay) {
   const info = dayInfo.find(i => i.day === ruDay);
   if (!info) return `❓ Нет данных для дня ${ruDay}.`;
-
   const karate = info.karate === false ? "❌ нет" : `🕒 ${info.karate}`;
   return (
     `📌 *${ruDay}*:\n` +
@@ -132,14 +114,11 @@ function formatPickupInfo(ruDay) {
     `🥋 Карате: ${karate}`
   );
 }
-
 function formatWeekPickup() {
   return dayInfo.map(i => formatPickupInfo(i.day)).join("\n\n");
 }
 
-/* ------------------------------------------------------------------
-   Инлайн‑клавиатуры
-   ------------------------------------------------------------------ */
+/* -------------------  INLINE KEYBOARDS  ------------------- */
 function mainMenuKeyboard(isAdmin) {
   const btns = [
     [{ text: "📅 Расписание на неделю", callback_data: "schedule_week" }],
@@ -147,13 +126,9 @@ function mainMenuKeyboard(isAdmin) {
     [{ text: "🗓️ График на неделю",    callback_data: "pickup_week" }],
     [{ text: "🗓️ График на день",      callback_data: "pickup_day" }]
   ];
-  if (isAdmin) {
-    btns.push([{ text: "🔔 Уведомить об обновлении", callback_data: "admin_notify" }]);
-  }
+  if (isAdmin) btns.push([{ text: "🔔 Уведомить об обновлении", callback_data: "admin_notify" }]);
   return { inline_keyboard: btns };
 }
-
-/* Клавиатура выбора дней – prefix = "schedule" или "pickup" */
 function daysKeyboard(prefix) {
   const dayBtns = ["Пн", "Вт", "Ср", "Чт", "Пт"].map(d => ({
     text: d,
@@ -167,51 +142,46 @@ function daysKeyboard(prefix) {
   };
 }
 
-/* ------------------------------------------------------------------
-   Отладочный лог – каждый callback_query попадает в консоль
-   ------------------------------------------------------------------ */
-bot.on("callback_query", ctx => {
-  console.log("🔥 Callback received:", ctx.callbackQuery?.data);
+/* -------------------  LOGGING & DEBUG  ------------------- */
+bot.use((ctx, next) => {
+  console.log("🟢 Update type:", ctx.updateType);
+  // Полный объект полностью виден в логах Vercel, удобно для отладки
+  console.log("🔎 Update payload:", JSON.stringify(ctx.update, null, 2));
+  return next();
 });
 
-/* ------------------------------------------------------------------
-   Стартовое сообщение
-   ------------------------------------------------------------------ */
+/* -------------------  BOT COMMANDS  ------------------- */
 bot.start(ctx => {
   knownUsers.add(ctx.from.id);
   ctx.reply(
-    `👋 Привет, ${ctx.from.first_name}!\n` +
-    `Выбери нужную функцию, нажимая кнопки ниже.`,
+    `👋 Привет, ${ctx.from.first_name}!\nВыбери действие, нажимая кнопки ниже.`,
     { reply_markup: mainMenuKeyboard(ctx.from.id === ADMIN_ID) }
   );
 });
 
-/* ---------------------- Главное меню ------------------------------- */
+/* ---------- Главное меню ---------- */
 bot.action("schedule_week", async ctx => {
-  await ctx.answerCbQuery(); // ✅ подтверждаем запрос
+  await ctx.answerCbQuery();          // ✅ подтверждаем запрос
   await ctx.replyWithMarkdownV2(formatWeekSchedule(), {
     reply_markup: { inline_keyboard: [[{ text: "↩️ Назад", callback_data: "back_main" }]] }
   });
 });
-
 bot.action("schedule_day", async ctx => {
   await ctx.answerCbQuery();
   await ctx.reply("Выбери день недели:", { reply_markup: daysKeyboard("schedule") });
 });
-
 bot.action("pickup_week", async ctx => {
   await ctx.answerCbQuery();
   await ctx.replyWithMarkdownV2(formatWeekPickup(), {
     reply_markup: { inline_keyboard: [[{ text: "↩️ Назад", callback_data: "back_main" }]] }
   });
 });
-
 bot.action("pickup_day", async ctx => {
   await ctx.answerCbQuery();
   await ctx.reply("Выбери день недели:", { reply_markup: daysKeyboard("pickup") });
 });
 
-/* ---------------------- Выбор отдельного дня ---------------------- */
+/* ---------- Выбор отдельного дня ---------- */
 bot.action(/^schedule_(\p{L}{2})$/u, async ctx => {
   const ruDay = ctx.match[1];
   await ctx.answerCbQuery();
@@ -219,7 +189,6 @@ bot.action(/^schedule_(\p{L}{2})$/u, async ctx => {
     reply_markup: { inline_keyboard: [[{ text: "↩️ Назад", callback_data: "back_main" }]] }
   });
 });
-
 bot.action(/^pickup_(\p{L}{2})$/u, async ctx => {
   const ruDay = ctx.match[1];
   await ctx.answerCbQuery();
@@ -228,16 +197,15 @@ bot.action(/^pickup_(\p{L}{2})$/u, async ctx => {
   });
 });
 
-/* ---------------------- Возврат в главное меню ------------------- */
+/* ---------- Возврат в главное меню ---------- */
 bot.action("back_main", async ctx => {
   await ctx.answerCbQuery();
-  await ctx.editMessageText(
-    "Главное меню:",
-    { reply_markup: mainMenuKeyboard(ctx.from.id === ADMIN_ID) }
-  );
+  await ctx.editMessageText("Главное меню:", {
+    reply_markup: mainMenuKeyboard(ctx.from.id === ADMIN_ID)
+  });
 });
 
-/* ---------------------- Уведомление админа ---------------------- */
+/* ---------- Уведомление админа ---------- */
 bot.action("admin_notify", async ctx => {
   if (ctx.from.id !== ADMIN_ID) {
     await ctx.answerCbQuery("Эта кнопка только для администратора", { show_alert: true });
@@ -246,7 +214,7 @@ bot.action("admin_notify", async ctx => {
 
   await ctx.answerCbQuery(); // ✅ запрос обработан
 
-  const text = "🔔 *Расписание обновлено!* Проверьте актуальные данные в боте.";
+  const text = "🔔 *Расписание обновлено!* Проверьте свежие данные в боте.";
   const promises = [...knownUsers].map(uid =>
     ctx.telegram.sendMessage(uid, text, { parse_mode: "MarkdownV2" })
   );
@@ -258,7 +226,7 @@ bot.action("admin_notify", async ctx => {
   await ctx.reply(`✅ Оповещение отправлено ${ok} пользователям, не удалось ${fail}.`);
 });
 
-/* ---------------------- Любой другой ввод ----------------------- */
+/* ---------- Любой текст ---------- */
 bot.on("text", async ctx => {
   await ctx.reply(
     "❓ Выберите действие, используя кнопки ниже.",
@@ -266,24 +234,41 @@ bot.on("text", async ctx => {
   );
 });
 
-/* ------------------------------------------------------------------
-   Vercel‑handler (webhook entry‑point)
-   ------------------------------------------------------------------ */
+/* --------------------------------------------------------------
+   VERCEL HANDLER (webhook entry‑point)
+   -------------------------------------------------------------- */
 export default async function handler(req, res) {
-  if (req.method === "POST") {
-    try {
-      // ------------ ВАЖНО! -------------- 
-      // Не передаём `res` в handleUpdate – иначе Vercel уже
-      // отправит ответ и Telegram “теряется”.
-      await bot.handleUpdate(req.body);
-      // После того, как Telegraf обработал запрос, просто отвечаем 200
-      res.status(200).send("ok");
-    } catch (e) {
-      console.error("❗ Bot error:", e);
-      res.status(500).send("internal error");
-    }
-  } else {
-    // GET – простой health‑check
-    res.status(200).send("Telegram bot is alive 👋");
+  if (req.method !== "POST") {
+    return res.status(200).send("Telegram bot is alive 👋");
+  }
+
+  try {
+    // 1️⃣ Получаем «сырой» буфер тела запроса
+    const raw = await getRawBody(req, {
+      length: req.headers["content-length"],
+      limit: "1mb",
+      encoding: true               // получаем строку JSON
+    });
+
+    // 2️⃣ Преобразуем в объект, который понимает Telegraf
+    const update = JSON.parse(raw);
+
+    // 3️⃣ Передаём объект в Telegraf
+    await bot.handleUpdate(update);
+
+    // 4️⃣ Обязательно отвечаем 200, иначе Telegram будет считать, что запрос провален
+    res.status(200).send("ok");
+  } catch (err) {
+    console.error("❗ Bot error:", err);
+    res.status(500).send("internal error");
   }
 }
+
+/* --------------------------------------------------------------
+   Отключаем автоматический парсер Vercel (это важно!)
+   -------------------------------------------------------------- */
+export const config = {
+  api: {
+    bodyParser: false   // <‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑-
+  }
+};
